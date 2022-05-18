@@ -6,7 +6,6 @@ import copy
 import numpy as np
 from lib.logger import get_logger
 from lib.metrics import All_Metrics
- 
 class Trainer(object):
     def __init__(self, model, loss, optimizer, train_loader, val_loader, test_loader,
                  scaler, args, lr_scheduler=None):
@@ -130,8 +129,9 @@ class Trainer(object):
             # early stop
             if self.args.early_stop:
                 if not_improved_count == self.args.early_stop_patience:
-                    self.logger.info("Validation performance didn\'t improve for {} epochs. "
-                                    "Training stops.".format(self.args.early_stop_patience))
+                    # self.logger.info("Validation performance didn\'t improve for {} epochs. "
+                    #                 "Training stops.".format(self.args.early_stop_patience))
+                    best_model = self.finetune(best_loss, best_model, epoch)
                     break
             # save the best state
             if best_state == True:
@@ -143,15 +143,60 @@ class Trainer(object):
         training_time = time.time() - start_time
         self.logger.info("Total training time: {:.4f}min, best loss: {:.6f}".format((training_time / 60), best_loss))
 
-        #save the best model to file
-        # if not self.args.debug:
-        #     torch.save(best_model, self.best_path)
-        #     self.logger.info("Saving current best model to " + self.best_path)
 
         #test
         self.model.load_state_dict(best_model)
-        #self.val_epoch(self.args.epochs, self.test_loader)
         self.test(self.model, self.args, self.test_loader, self.scaler, self.logger)
+
+        # if self.args.finetune:
+        #     self.finetune(best_loss, best_model)
+        #self.val_epoch(self.args.epochs, self.test_loader)
+        
+
+    def finetune(self, best_loss, best_model, e=0):
+        not_improved_count = 0
+        # init optimizer
+        self.optimizer = torch.optim.Adam(params=self.model.parameters(), lr=self.args.lr_init/self.args.finetune_scale, eps=1.0e-8,
+                             weight_decay=self.args.weight_decay_rate, amsgrad=False)
+
+        for epoch in range(e, self.args.epochs + 1):
+            #epoch_time = time.time()
+            train_epoch_loss = self.train_epoch(epoch)
+            #print(time.time()-epoch_time)
+            #exit()
+            if self.val_loader == None:
+                val_dataloader = self.test_loader
+            else:
+                val_dataloader = self.val_loader
+            val_epoch_loss = self.val_epoch(epoch, val_dataloader)
+
+            if train_epoch_loss > 1e6:
+                self.logger.warning('Gradient explosion detected. Ending...')
+                break
+            #if self.val_loader == None:
+            #val_epoch_loss = train_epoch_loss
+            if val_epoch_loss < best_loss:
+                best_loss = val_epoch_loss
+                not_improved_count = 0
+                best_state = True
+            else:
+                not_improved_count += 1
+                best_state = False
+            # early stop
+            if self.args.early_stop:
+                if not_improved_count == self.args.early_stop_patience:
+                    self.logger.info("Validation performance didn\'t improve for {} epochs. "
+                                    "Training stops.".format(self.args.early_stop_patience))
+                    break
+            # save the best state
+            if best_state == True:
+                self.logger.info('*********************************Current best model saved!')
+                best_model = copy.deepcopy(self.model.state_dict())
+                torch.save(self.model, self.best_path)
+                self.logger.info("Saving current best --- whole --- model to " + self.best_path)
+
+        return best_model
+
 
     def save_checkpoint(self):
         state = {
