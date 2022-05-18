@@ -87,7 +87,8 @@ args.add_argument('--mape_thresh', default=config['test']['mape_thresh'], type=f
 args.add_argument('--log_dir', default='./', type=str)
 args.add_argument('--log_step', default=config['log']['log_step'], type=int)
 args.add_argument('--plot', default=config['log']['plot'], type=eval)
-
+args.add_argument('--finetune', default=True, type=bool)
+args.add_argument('--finetune_scale', default=100, type=float)
 args.add_argument('--use_trick', default=False, type=bool)
 args.add_argument('--no_diff', default=False, type=bool)
 args.add_argument('--no_g', default=False, type=bool)
