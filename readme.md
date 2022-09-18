@@ -27,5 +27,5 @@ python Run.py
 
 We provide pretrained model, you can run the following code to test:
 ```
-python Run.py --model test
+python Run.py --mode test
 ```
